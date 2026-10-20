@@ -11,6 +11,7 @@ Window {
   color: "#eeeeee"
 
   property int requestedReplies: 0
+  property int stackDismissals: 0
   property string invokedAction: ""
   property var cases: []
   property int index: -1
@@ -27,6 +28,7 @@ Window {
     paused: true
     onReplyRequested: test.requestedReplies++
     onActionInvoked: identifier => test.invokedAction = identifier
+    onStackDismissed: test.stackDismissals++
   }
 
   TextMetrics {
@@ -101,12 +103,40 @@ Window {
     var t=title.mapToItem(toast, 0, 0), line=title.implicitHeight / Math.max(1, title.lineCount)
     check(Math.abs((p.y + shut.height / 2) - (t.y + line / 2)) < 1,
           c.label + ": close control is not centred on the title's first line")
+    checkStackControl(c, shut, title)
+  }
+  // The front card of an open stack clears the whole stack from beside the
+  // close control; every other card has only the close control. A shut stack
+  // shows it only on a front card under the pointer.
+  function checkStackControl(c, shut, title) {
+    if (c.leads) {
+      toast.expanded=false
+      var hoveredShut=nodes(toast).find(n => n.text === "Clear all" && n.rightClicked !== undefined).visible
+      toast.hovered=false
+      var idleShut=nodes(toast).find(n => n.text === "Clear all" && n.rightClicked !== undefined).visible
+      toast.expanded=true; toast.hovered=true
+      check(hoveredShut && !idleShut, c.label + ": shut stack shows the stack control wrongly")
+    }
+    var found=nodes(toast).filter(n => n.text === "Clear all" && n.rightClicked !== undefined)
+    check(found.length === 1, "expected one stack control")
+    var clear=found[0]
+    check(clear.visible === !!c.leads, c.label + ": stack control visibility is wrong")
+    if (!c.leads) return
+    inside(clear, toast, c.label + ": stack control crosses the card edge")
+    var a=clear.mapToItem(toast, 0, 0), b=shut.mapToItem(toast, 0, 0), t=title.mapToItem(toast, 0, 0)
+    check(a.x + clear.width <= b.x, c.label + ": stack control overlaps the close control")
+    check(t.x + title.width <= a.x, c.label + ": stack control overlaps the title")
+    var label=nodes(clear).find(n => n !== clear && n.text === "Clear all" && n.lineCount !== undefined)
+    check(label && label.contentWidth <= clear.width + 0.5, c.label + ": stack control label is clipped")
+    var before=stackDismissals
+    clear.clicked()
+    check(stackDismissals === before + 1, c.label + ": stack control does not dismiss the stack")
   }
   function configure(c) {
     toast.deedsOpen=false; toast.menuOpen=false; toast.replying=false; toast.takenKind=""
     toast.fontScale=c.scale; toast.actionsAlign=c.align || "right"
     toast.actions=[]
-    toast.place=({front: true, count: c.count || 1, z: 1})
+    toast.place=({front: true, count: c.count || 1, leads: c.leads || 1, z: 1})
     toast.now=clock
     var row=baseRow()
     if (c.kind === "visibility")
@@ -168,6 +198,8 @@ Window {
                            {label:"icon",title:"Ready",icon:true},
                            {label:"marks",title:"Ready",marks:true},
                            {label:"stack count",title:"Ready",count:3},
+                           {label:"stack lead",title:"Ready",leads:3},
+                           {label:"stack lead, long title",title:long,leads:3,lines:3},
                            {label:"actions",title:long,actions:true}])
           out.push(Object.assign({kind:"corner",scale:cornerScale,bare:bare}, shape))
     cases=out

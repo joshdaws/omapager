@@ -55,6 +55,7 @@ Item {
   signal expired()
   signal activated()
   signal dismissed()
+  signal stackDismissed()
   signal snoozeRequested(int seconds)
   signal silenceRequested()
 
@@ -82,6 +83,13 @@ Item {
   readonly property bool bodyOpen: expanded || (hovered && sole)
   readonly property int bodyLines: bodyOpen ? 8 : 2
   readonly property int stands: place.count || 1     // how many this card speaks for
+  // The front card of a stack carries the control that clears the lot, while
+  // the stack is open or the card is under the pointer. A shut stack opens the
+  // moment the pointer moves onto it, except when it slides under a pointer
+  // that is standing still - after the stack above it was cleared - and then
+  // the control is where that pointer already is: a second click clears this
+  // stack too, rather than landing on its newest card and opening it.
+  readonly property bool leadsStack: (expanded || hovered) && (place.leads || 0) > 1
 
   // Everything this card can do, in one row: what it found in its own text
   // first, then what the sender said it supports. Spelled out rather than
@@ -211,6 +219,14 @@ Item {
   property real hoverY: -1
   readonly property real localHoverX: hoverX - x
   readonly property real localHoverY: hoverY - y
+
+  // Whether that pointer is over one of this card's own controls.
+  function pointerOn(item) {
+    if (!hovered) return false
+    var origin = item.mapToItem(card, 0, 0)
+    return localHoverX >= origin.x && localHoverX <= origin.x + item.width
+        && localHoverY >= origin.y && localHoverY <= origin.y + item.height
+  }
 
   function doDeed(deed) {
     var kind = String(deed.kind || "")
@@ -570,6 +586,27 @@ Item {
             y: (headline.band - height) / 2
             spacing: Style.space(5)
 
+            // One click for the whole stack. Shown for as long as the stack
+            // is open, not only while this card is hovered: it takes width
+            // from the title, and taking it card by card would re-wrap the
+            // title as the pointer moved down the stack. Opening the stack
+            // re-wraps it anyway, as the bodies open.
+            Button {
+              id: clearStack
+              visible: card.leadsStack
+              anchors.verticalCenter: parent.verticalCenter
+              text: "Clear all"
+              bordered: true
+              horizontalPadding: Style.space(6)
+              verticalPadding: Style.space(2)
+              foreground: Color.notifications.text
+              fontFamily: Style.font.family
+              fontSize: Style.font.caption * card.fontScale
+              hasCursor: card.pointerOn(clearStack)
+              onClicked: card.stackDismissed()
+              onRightClicked: card.menuOpen = !card.menuOpen
+            }
+
             // The time and the close control occupy the same square. Hover
             // crossfades between them rather than sliding the time aside: one
             // thing changing into another reads as a single control, and
@@ -610,14 +647,7 @@ Item {
                 fontSize: Style.font.caption * card.fontScale
                 // The deck owns pointer hover; mirror its coordinates into the
                 // shared control state just as action buttons do.
-                hasCursor: {
-                  if (!card.hovered) return false
-                  var origin = mapToItem(card, 0, 0)
-                  return card.localHoverX >= origin.x
-                      && card.localHoverX <= origin.x + width
-                      && card.localHoverY >= origin.y
-                      && card.localHoverY <= origin.y + height
-                }
+                hasCursor: card.pointerOn(shut)
                 enabled: card.hovered
                 opacity: card.hovered ? 1 : 0
                 visible: opacity > 0.01
