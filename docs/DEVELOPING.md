@@ -355,7 +355,7 @@ half of the feature set has no input, not a degraded one.
 Run `tests/font-layout.sh` on an Omarchy installation. It renders the actual
 Toast and DeedButton components offscreen without starting a notification
 daemon. Three explicit control-typography profiles (12px monospace, 14px monospace
-and 12px proportional) each run 78 cases; card content retains the stock
+and 12px proportional) each run 118 cases; card content retains the stock
 notification font. Cases include:
 
 - Every 5% font-scale step from 75–200%, with both action alignments.
@@ -366,6 +366,9 @@ notification font. Cases include:
   size and replacing actions while the list is open.
 - A short title that should remain on one line, and a wrapping fixture that
   is extended until its measured text exceeds the available width.
+- The close control in the same top-right position, centred on the title's
+  first line, for short, wrapping and open titles, every age label, an icon,
+  marks, a count and actions, with and without a body, at 100% and 150%.
 
 The long-label cases reach the expanded list, not just the More-only row.
 Set `OMARCHY_SHELL_DIR` if the shell is installed somewhere other than

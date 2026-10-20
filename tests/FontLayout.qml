@@ -74,10 +74,40 @@ Window {
     return bs
   }
   function baseRow() { return {summary:"Ready",body:"Synthetic test message"} }
+  // A fixed clock, so every age label the card can show is reachable.
+  readonly property double clock: new Date(2026, 0, 15, 14, 5).getTime()
+  // Where the close control sat in the first case of each typography group.
+  property var corners: ({})
+  function closeControl() {
+    var found=nodes(toast).filter(n => n.text === "\u2715" && n.rightClicked !== undefined)
+    check(found.length === 1, "expected one close control")
+    return found[0]
+  }
+  // The close control must not move with the content: not with the title's
+  // length, the age label's width, an icon, marks, a count or actions.
+  function checkCorner(c) {
+    var shut=closeControl(), title=nodes(toast).find(n => n.text === toast.row.summary && n.lineCount !== undefined)
+    check(shut.visible && shut.enabled, "close control is not reachable")
+    if (c.lines) check(title.lineCount >= c.lines, "title fixture wrapped to " + title.lineCount + " lines")
+    var p=shut.mapToItem(toast, 0, 0)
+    var corner={right: toast.width - (p.x + shut.width), top: p.y, w: shut.width, h: shut.height}
+    var group=toast.fontScale + (toast.hasBody ? ":body" : ":bare")
+    var first=corners[group]
+    if (!first) { corners[group]=corner; first=corner }
+    check(Math.abs(corner.right-first.right) < 0.5 && Math.abs(corner.top-first.top) < 0.5,
+          c.label + ": close control moved to right " + corner.right.toFixed(1) + " top " + corner.top.toFixed(1)
+          + ", expected right " + first.right.toFixed(1) + " top " + first.top.toFixed(1))
+    // And it sits on the title's first line, not the middle of the title.
+    var t=title.mapToItem(toast, 0, 0), line=title.implicitHeight / Math.max(1, title.lineCount)
+    check(Math.abs((p.y + shut.height / 2) - (t.y + line / 2)) < 1,
+          c.label + ": close control is not centred on the title's first line")
+  }
   function configure(c) {
     toast.deedsOpen=false; toast.menuOpen=false; toast.replying=false; toast.takenKind=""
     toast.fontScale=c.scale; toast.actionsAlign=c.align || "right"
     toast.actions=[]
+    toast.place=({front: true, count: c.count || 1, z: 1})
+    toast.now=clock
     var row=baseRow()
     if (c.kind === "visibility")
       row.body = "This notification wraps onto several lines so hiding an inactive output must not collapse the content measurement used by the visible card."
@@ -87,6 +117,13 @@ Window {
       toast.actions=[{id:"long",text:c.label},{id:"second",text:"Second action"}]
     } else if (c.kind === "title") {
       row.summary=c.title
+    } else if (c.kind === "corner") {
+      row.summary=c.title
+      if (c.bare) delete row.body
+      row.ts=(clock - (c.age || 0) * 1000) / 1000
+      if (c.marks) { row.code="123456"; row.codes="123456"; row.link="https://example.com" }
+      if (c.icon) row.stored_image=String(Qt.resolvedUrl("Plugin/preview.png"))
+      if (c.actions) toast.actions=[{id:"one",text:"Mark as read"},{id:"two",text:"Archive"}]
     }
     toast.row=row
   }
@@ -118,6 +155,21 @@ Window {
       out.push({kind:"title",scale:size,title:"Ready",wrap:false})
       out.push({kind:"title",scale:size,title:"Workspace layout set to scrolling and ready for the next application window",wrap:true})
     }
+    var long="A much longer notification title that keeps going so that it has to wrap onto a second and then a third line"
+    var longer=long + ", and then keeps on going for long enough to need more lines than the card shows while it is closed"
+    for (var cornerScale of [1,1.5])
+      for (var bare of [false,true])
+        for (var shape of [{label:"short title",title:"Ready"},
+                           {label:"three-line title",title:long,lines:3},
+                           {label:"open long title",title:longer,lines:4},
+                           {label:"age 5m",title:"Ready",age:300},
+                           {label:"age 14:05",title:"Ready",age:3*3600},
+                           {label:"age yesterday",title:"Ready",age:26*3600},
+                           {label:"icon",title:"Ready",icon:true},
+                           {label:"marks",title:"Ready",marks:true},
+                           {label:"stack count",title:"Ready",count:3},
+                           {label:"actions",title:long,actions:true}])
+          out.push(Object.assign({kind:"corner",scale:cornerScale,bare:bare}, shape))
     cases=out
   }
   Timer {
@@ -127,6 +179,7 @@ Window {
         if (test.phase === "start") { test.next(); return }
         var c=test.cases[test.index], bs=test.checkGeometry()
         var title=test.nodes(toast).find(n=>n.text===toast.row.summary && n.lineCount !== undefined)
+        if (c.kind === "corner") { test.checkCorner(c); test.next(); return }
         test.check(title && !title.truncated,"title unexpectedly truncated")
         if (c.kind === "visibility") {
           if (test.phase === "row") {
